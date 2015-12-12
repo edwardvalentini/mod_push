@@ -2,7 +2,7 @@
 %%% File    : mod_push.erl
 %%% Author  : Christian Ulrich <christian@rechenwerk.net>
 %%% Purpose : implements XEP-0357 Push and an IM-focussed app server
-%%%           
+%%%
 %%% Created : 22 Dec 2014 by Christian Ulrich <christian@rechenwerk.net>
 %%%
 %%%
@@ -142,7 +142,7 @@
                             secret :: binary(),
                             app_id :: binary(),
                             backend_id :: integer(),
-                            timestamp = now() :: erlang:timestamp()}).
+                            timestamp = erlang:timestamp() :: erlang:timestamp()}).
 
 %% mnesia table
 -record(push_backend,
@@ -151,14 +151,13 @@
          pubsub_host :: binary(),
          type :: backend_type(),
          app_name :: binary(),
-         sandbox :: boolean(),
          cluster_nodes = [] :: [atom()],
          worker :: binary()}).
 
 %% mnesia table
 -record(push_stored_packet, {receiver :: ljid(),
                              sender :: jid(),
-                             timestamp = now() :: erlang:timestamp(),
+                             timestamp = erlang:timestamp() :: erlang:timestamp(),
                              packet :: xmlelement()}).
 
 -type auth_data() :: #auth_data{}.
@@ -244,12 +243,12 @@ register_client(#jid{luser = LUser,
                                                  secret = Secret,
                                                  app_id = AppId,
                                                  backend_id = BackendId,
-                                                 timestamp = now()}
+                                                 timestamp = erlang:timestamp() }
                 end,
                 mnesia:write(Registration),
                 {PubsubHost, Registration#push_registration.node,
                  Registration#push_registration.secret};
-            
+
             _ ->
                 ?DEBUG("+++++ register_client: found no backend", []),
                 error
@@ -259,7 +258,7 @@ register_client(#jid{luser = LUser,
         {aborted, _} -> {error, ?ERR_INTERNAL_SERVER_ERROR};
         {atomic, error} -> {error, ?ERR_ITEM_NOT_FOUND};
         {atomic, Result} -> {registered, Result}
-    end. 
+    end.
 
 %-------------------------------------------------------------------------
 
@@ -273,7 +272,7 @@ register_client(#jid{luser = LUser,
 ).
 
 unregister_client({Node, Timestamp}) ->
-    unregister_client(undefined, undefined, Timestamp, [Node]). 
+    unregister_client(undefined, undefined, Timestamp, [Node]).
 
 %-------------------------------------------------------------------------
 
@@ -398,7 +397,7 @@ unregister_client(UserJid, DeviceId, Timestamp, Nodes) ->
                                 UserOk =
                                 case UserJid of
                                     #jid{luser = LUser, lserver = LServer} ->
-                                        BareJid = 
+                                        BareJid =
                                         Reg#push_registration.bare_jid,
                                         BareJid =:= {LUser, LServer};
                                     undefined -> true
@@ -427,7 +426,7 @@ unregister_client(UserJid, DeviceId, Timestamp, Nodes) ->
         {atomic, error} -> error;
         {atomic, Result} -> {unregistered, Result}
     end.
-                                         
+
 %-------------------------------------------------------------------------
 
 -spec(enable/4 ::
@@ -451,12 +450,12 @@ enable(#jid{luser = LUser, lserver = LServer, lresource = LResource},
     parse_form(XDataForms, ?NS_PUBLISH_OPTIONS, [], [{single, <<"secret">>}]),
     ?DEBUG("+++++ ParsedSecret = ~p", [ParsedSecret]),
     Secret = case ParsedSecret of
-        not_found -> undefined; 
+        not_found -> undefined;
         error -> error;
         {result, [S]} -> S
     end,
     case Secret of
-        error -> {error, ?ERR_BAD_REQUEST}; 
+        error -> {error, ?ERR_BAD_REQUEST};
         _ ->
             F = fun() ->
                 MatchHeadBackend =
@@ -485,13 +484,13 @@ enable(#jid{luser = LUser, lserver = LServer, lresource = LResource},
                                 mnesia:write(NewUser),
                                 make_config_form(ChangedOpts)
                         end;
-                    
+
                     [#push_user{subscriptions = Subscriptions,
                                 config = OldConfig}] ->
                         ?DEBUG("+++++ enable: found user, config = ~p", [OldConfig]),
                         case make_config(XDataForms, OldConfig, disable_only) of
                             error -> error;
-                            {Config, ChangedOpts} -> 
+                            {Config, ChangedOpts} ->
                                 FilterNode =
                                 fun
                                     (S) when S#subscription.node =:= Node;
@@ -520,7 +519,7 @@ enable(#jid{luser = LUser, lserver = LServer, lresource = LResource},
                 {atomic, ResponseForm} -> {enabled, ResponseForm}
             end
     end.
-                
+
 %-------------------------------------------------------------------------
 
 -spec(disable/3 ::
@@ -528,7 +527,7 @@ enable(#jid{luser = LUser, lserver = LServer, lresource = LResource},
     From :: jid(),
     PubsubJid :: jid(),
     Node :: binary())
-    -> {error, xmlelement()} | {disabled, ok} 
+    -> {error, xmlelement()} | {disabled, ok}
 ).
 
 disable(From, PubsubJid, Node) -> disable(From, PubsubJid, Node, false).
@@ -541,7 +540,7 @@ disable(From, PubsubJid, Node) -> disable(From, PubsubJid, Node, false).
     PubsubJid :: jid(),
     Node :: binary(),
     StopSessions :: boolean())
-    -> {error, xmlelement()} | {disabled, ok} 
+    -> {error, xmlelement()} | {disabled, ok}
 ).
 
 disable(_From, _PubsubJid, <<"">>, _StopSessions) ->
@@ -569,7 +568,7 @@ disable(#jid{luser = LUser, lserver = LServer},
         {atomic, error} -> {error, ?ERR_ITEM_NOT_FOUND};
         {atomic, ok} -> {disabled, ok}
     end.
-       
+
 %-------------------------------------------------------------------------
 
 -spec(delete_subscriptions/3 ::
@@ -591,7 +590,7 @@ delete_subscriptions({LUser, LServer}, SubscriptionPred, StopSessions) ->
                 case Pid of
                     P when is_pid(P) ->
                         %% FIXME: replace by P ! stop
-                        P ! kick; 
+                        P ! kick;
                     _ ->
                         ?DEBUG("++++ Didn't find PID for ~p@~p/~p",
                                [LUser, LServer, Subscription#subscription.resource])
@@ -655,10 +654,10 @@ list_registrations(#jid{luser = LUser, lserver = LServer}) ->
 on_store_stanza(RerouteFlag, To, Stanza) ->
     ?DEBUG("++++++++++++ Stored Stanza for ~p: ~p",
            [To, Stanza]),
-    F = fun() -> dispatch([{now(), Stanza}], To, false) end,
+    F = fun() -> dispatch([{erlang:timestamp(), Stanza}], To, false) end,
     case mnesia:transaction(F) of
         {atomic, not_subscribed} -> RerouteFlag;
-        
+
         {atomic, ok} ->
             case RerouteFlag of
                 true -> false_on_system_shutdown;
@@ -669,7 +668,7 @@ on_store_stanza(RerouteFlag, To, Stanza) ->
             ?DEBUG("+++++ error in on_store_stanza: ~p", [Error]),
             RerouteFlag
     end.
-                                      
+
 %-------------------------------------------------------------------------
 
 -spec(dispatch/3 ::
@@ -726,7 +725,7 @@ dispatch(Stanzas, UserJid, SetPending) ->
                     end
             end
     end.
-                                            
+
 %-------------------------------------------------------------------------
 
 -spec(do_dispatch/4 ::
@@ -744,7 +743,7 @@ do_dispatch({local_reg, _, Secret}, UserBare, NodeId, Payload) ->
         [] ->
             ?INFO_MSG("push event for local user ~p, but user is not registered"
                       " at local app server", [UserBare]);
-       
+
         [#push_registration{node = Node,
                             bare_jid = StoredUserBare,
                             token = Token,
@@ -754,20 +753,20 @@ do_dispatch({local_reg, _, Secret}, UserBare, NodeId, Payload) ->
                             timestamp = Timestamp}] ->
             case {UserBare, Secret} of
                 {StoredUserBare, StoredSecret} ->
-                    
+
                     ?DEBUG("+++++ do_dispatch: found registration, dispatch locally",
                            []),
                     do_dispatch_local(UserBare, Payload, Token, AppId,
                                       BackendId, Node, Timestamp, true);
 
-                {StoredUserBare, _} -> 
+                {StoredUserBare, _} ->
                     ?INFO_MSG("push event for local user ~p, but secret does "
                               "not match", [UserBare]);
 
                 _ ->
                     ?INFO_MSG("push event for local user ~p, but the "
                               "user-provided node belongs to another user",
-                              [UserBare]) 
+                              [UserBare])
             end
     end;
 
@@ -819,7 +818,7 @@ do_dispatch_local(UserBare, Payload, Token, AppId, BackendId, Node, Timestamp,
                          UserBare, Payload, Token, AppId, DisableArgs})
             end
     end.
-           
+
 %-------------------------------------------------------------------------
 
 -spec(do_dispatch_remote/5 ::
@@ -951,7 +950,7 @@ on_remove_user(User, Server) ->
 on_affiliation_removal(User, From, _To,
                        #xmlel{name = <<"message">>, children = Children}) ->
     FindNodeAffiliations =
-    fun 
+    fun
     F([#xmlel{name = <<"pubsub">>, attrs = Attrs, children = PChildr}|T]) ->
         case proplists:get_value(<<"xmlns">>, Attrs) of
             ?NS_PUBSUB ->
@@ -1000,7 +999,7 @@ on_affiliation_removal(User, From, _To,
     end;
 
 on_affiliation_removal(_Jid, _From, _To, _) -> ok.
-        
+
 %-------------------------------------------------------------------------
 
 -spec(on_wait_for_resume/3 ::
@@ -1044,7 +1043,7 @@ on_resume_session(#jid{luser = LUser, lserver = LServer, lresource = LResource}
                 NewSubscrs = set_pending(LResource, false, Subscrs),
                 mnesia:write(PushUser#push_user{payload = [],
                                                 subscriptions = NewSubscrs}),
-                mnesia:delete({push_stored_packet, jlib:jid_tolower(User)}) 
+                mnesia:delete({push_stored_packet, jlib:jid_tolower(User)})
         end
     end,
     mnesia:transaction(F).
@@ -1124,7 +1123,7 @@ incoming_notification(_HookAcc, Node, [#xmlel{name = <<"notification">>,
                                 bad_request
                         end
                 end;
- 
+
             false -> not_authorized
         end
     end,
@@ -1198,14 +1197,14 @@ add_backends(Host) ->
             start_worker(Backend, AuthData)
         end,
         Backends).
-    
+
 %-------------------------------------------------------------------------
 
 -spec(add_disco_hooks/1 ::
 (
     ServerHost :: binary())
     -> any()
-). 
+).
 
 add_disco_hooks(ServerHost) ->
     BackendKeys = mnesia:all_keys(push_backend),
@@ -1246,7 +1245,7 @@ add_disco_hooks(ServerHost) ->
     -> ok
 ).
 
-start_worker(#push_backend{worker = Worker, type = Type, sandbox = Sandbox},
+start_worker(#push_backend{worker = Worker, type = Type},
              #auth_data{auth_key = AuthKey,
                         package_sid = PackageSid,
                         certfile = CertFile}) ->
@@ -1257,12 +1256,11 @@ start_worker(#push_backend{worker = Worker, type = Type, sandbox = Sandbox},
                          {mozilla, ?MODULE_MOZILLA},
                          {ubuntu, ?MODULE_UBUNTU},
                          {wns, ?MODULE_WNS}]),
-    PlatformOptions = [{sandbox, Sandbox}],
     BackendSpec =
     {Worker,
      {gen_server, start_link,
       [{local, Worker}, Module,
-       [AuthKey, PackageSid, CertFile, PlatformOptions], []]},
+       [AuthKey, PackageSid, CertFile], []]},
      permanent, 1000, worker, [?MODULE]},
     supervisor:start_child(ejabberd_sup, BackendSpec).
 
@@ -1375,7 +1373,7 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
                     {result, [Token, AppId, DeviceId, DeviceName]} ->
                         register_client(From, LServer, ubuntu, Token,
                                         DeviceId, DeviceName, AppId);
-                    
+
                     _ -> error
                 end
             end;
@@ -1402,7 +1400,7 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
                                     [], [{single, <<"device-id">>},
                                          {multi, <<"nodes">>}]),
                 case Parsed of
-                    {result, [DeviceId, NodeIds]} -> 
+                    {result, [DeviceId, NodeIds]} ->
                         unregister_client(From, DeviceId, NodeIds);
 
                     not_found ->
@@ -1503,7 +1501,7 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
 
 process_adhoc_command(Acc, _From, _To, _Request) ->
     Acc.
-     
+
 %-------------------------------------------------------------------------
 
 -spec(process_iq/3 ::
@@ -1523,7 +1521,7 @@ process_iq(From, _To, #iq{type = Type, sub_el = SubEl} = IQ) ->
             case jlib:string_to_jid(JidB) of
                 error ->
                     IQ#iq{type = error, sub_el = [?ERR_JID_MALFORMED, SubEl]};
-                
+
                 Jid ->
                     case {Type, SubEl} of
                         {set, #xmlel{name = <<"enable">>,
@@ -1533,7 +1531,7 @@ process_iq(From, _To, #iq{type = Type, sub_el = SubEl} = IQ) ->
                                 {enabled, ok} ->
                                     IQ#iq{type = result, sub_el = []};
 
-                                {enabled, ResponseForm} -> 
+                                {enabled, ResponseForm} ->
                                     NewSubEl =
                                     SubEl#xmlel{children = ResponseForm},
                                     IQ#iq{type = result, sub_el = [NewSubEl]};
@@ -1561,7 +1559,7 @@ process_iq(From, _To, #iq{type = Type, sub_el = SubEl} = IQ) ->
                     end
             end
     end.
-                    
+
 %-------------------------------------------------------------------------
 
 -spec(on_disco_sm_features/5 ::
@@ -1673,7 +1671,7 @@ on_disco_reg_identity(Acc, _From, #jid{lserver = RegHost}, <<"">>, _Lang) ->
 
 on_disco_reg_identity(Acc, _From, _To, _Node, _Lang) ->
     Acc.
-               
+
 on_disco_sm_identity(Acc, From, To, <<"">>, _Lang) ->
     FromL = jlib:jid_tolower(From),
     ToL = jlib:jid_tolower(To),
@@ -1720,7 +1718,7 @@ start(Host, _Opts) ->
     % implementation saves traffic. On the downside, config differences
     % between two instances would probably lead to unpredictable results and
     % the authorization data needed for e.g. APNS must be present on all
-    % instances 
+    % instances
     % TODO: disable push subscription when session is deleted
     mnesia:create_table(push_user,
                         [{disc_copies, [node()]},
@@ -1761,15 +1759,8 @@ start(Host, _Opts) ->
                                   process_iq, one_queue),
     ejabberd_hooks:add(mgmt_queue_add_hook, Host, ?MODULE, on_store_stanza,
                        50),
-%% When connecting without resuming the unset_presence_hook is triggered causing
-%% messages in push_stored_packet to be deleted. The messages will be lost and no
-%% notifications are triggered. Skipping this hook will keep the messages and only
-%% delete them when they are delivered to the client on an user_available_hook.
-%% This does make the logic somewhat odd and complex, it might be better to switch
-%% to a model where notifications are triggered when messages are queued for later
-%% delivery because the user is offline/unavailable.
-%    ejabberd_hooks:add(unset_presence_hook, Host, ?MODULE, on_unset_presence,
-%                       70),
+    ejabberd_hooks:add(unset_presence_hook, Host, ?MODULE, on_unset_presence,
+                       70),
     ejabberd_hooks:add(mgmt_resume_session_hook, Host, ?MODULE,
                        on_resume_session, 50),
     ejabberd_hooks:add(mgmt_wait_for_resume_hook, Host, ?MODULE,
@@ -1937,7 +1928,7 @@ make_config(XDataForms, OldConfig, ConfigPrivilege) ->
     ?DEBUG("+++++ ParseResult = ~p", [ParseResult]),
     case ParseResult of
         error -> error;
-        
+
         not_found -> {OldConfig, []};
 
         {result, ParsedOptions} ->
@@ -1969,7 +1960,7 @@ make_config(XDataForms, OldConfig, ConfigPrivilege) ->
                         lists:zip(AllowedOpts, ParsedOptions))
             end
     end.
-                    
+
 %-------------------------------------------------------------------------
 
 -spec(parse_backends/2 ::
@@ -1983,7 +1974,7 @@ parse_backends(RawBackendOptsList, DefaultCertFile) ->
     BackendOptsList = get_backend_opts(RawBackendOptsList),
     MakeBackend =
     fun({RegHostJid, PubsubHostJid, Type, AppName, CertFile, AuthKey,
-         PackageSid, Sandbox}, Acc) ->
+         PackageSid}, Acc) ->
         ChosenCertFile = case is_binary(CertFile) of
             true -> CertFile;
             false -> DefaultCertFile
@@ -2004,7 +1995,6 @@ parse_backends(RawBackendOptsList, DefaultCertFile) ->
                    pubsub_host = PubsubHostJid#jid.lserver,
                    type = Type,
                    app_name = AppName,
-                   sandbox = Sandbox,
                    cluster_nodes = [node()],
                    worker = Worker},
                 [{Backend, AuthData}|Acc];
@@ -2035,9 +2025,8 @@ get_backend_opts(RawOptsList) ->
             CertFile = proplists:get_value(certfile, Opts),
             AuthKey = proplists:get_value(auth_key, Opts),
             PackageSid = proplists:get_value(package_sid, Opts),
-            Sandbox = proplists:get_value(sandbox, Opts, true),
             {RegHostJid, PubsubHostJid, Type, AppName, CertFile, AuthKey,
-             PackageSid, Sandbox}
+             PackageSid}
         end,
         RawOptsList).
 
@@ -2077,7 +2066,7 @@ make_payload(UnackedStanzas, StoredPayload, Config) ->
                     [] -> undefined;
                     [#xmlel{children = [{xmlcdata, CData}]}|_] -> CData
                 end,
-                NewMsgCount = 
+                NewMsgCount =
                 case proplists:get_value('message-count', OldPayload, 0) of
                     ?MAX_INT -> 0;
                     C when is_integer(C) -> C + 1
@@ -2112,14 +2101,14 @@ make_payload(UnackedStanzas, StoredPayload, Config) ->
     lists:foldl(
         fun({Timestamp, Stanza}, {PayloadAcc, StanzasAcc}) ->
             case MakeNewValues(Stanza, PayloadAcc) of
-                {push, NewValues} -> 
+                {push, NewValues} ->
                     {UpdatePayload(NewValues, PayloadAcc), StanzasAcc};
 
                 {push_and_store, NewValues} ->
                     {UpdatePayload(NewValues, PayloadAcc),
                      [{Timestamp, Stanza}|StanzasAcc]}
             end
-        end,                                              
+        end,
         {StoredPayload, []},
         UnackedStanzas),
     {filter_payload(NewPayload, Config), StanzasToStore}.
@@ -2242,7 +2231,7 @@ get_xdata_value(FieldName, Fields, DefaultValue) ->
 (
     FieldName :: binary(),
     Fields :: [{binary(), [binary()]}])
-    -> [binary()] 
+    -> [binary()]
 ).
 
 get_xdata_values(FieldName, Fields) ->
@@ -2258,7 +2247,7 @@ get_xdata_values(FieldName, Fields) ->
 
 get_xdata_values(FieldName, Fields, DefaultValue) ->
     proplists:get_value(FieldName, Fields, DefaultValue).
-    
+
 %-------------------------------------------------------------------------
 
 -spec(parse_form/4 ::
@@ -2271,7 +2260,7 @@ get_xdata_values(FieldName, Fields, DefaultValue) ->
     OptionalFields :: [{multi, binary()} | {single, binary()} |
                        {{multi, binary()}, fun((binary()) -> any())} |
                        {{single, binary()}, fun((binary()) -> any())}])
-    -> not_found | error | {result, [any()]} 
+    -> not_found | error | {result, [any()]}
 ).
 
 parse_form([], _FormType, _RequiredFields, _OptionalFields) ->

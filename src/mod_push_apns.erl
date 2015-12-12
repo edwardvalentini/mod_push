@@ -38,8 +38,8 @@
 
 -include("logger.hrl").
 
--define(PUSH_URL_PRODUCTION, "gateway.push.apple.com").
--define(PUSH_URL_SANDBOX, "gateway.sandbox.push.apple.com").
+%-define(PUSH_URL, "gateway.push.apple.com").
+-define(PUSH_URL, "gateway.sandbox.push.apple.com").
 -define(APNS_PORT, 2195).
 -define(SSL_TIMEOUT, 3000).
 -define(MAX_PAYLOAD_SIZE, 2048).
@@ -58,10 +58,6 @@
 
 -record(state,
         {certfile :: binary(),
-         sandbox :: boolean(),
-         aps_alert :: boolean(),
-         aps_badge :: boolean(),
-         aps_sound :: boolean(),
          out_socket :: ssl:socket(),
          pending_list :: [{pos_integer(), any()}],
          send_list :: [any()],
@@ -74,16 +70,12 @@
 
 %-------------------------------------------------------------------------
 
-init([_AuthKey, _PackageSid, CertFile, PlatformOptions]) ->
-    ?DEBUG("+++++++++ mod_push_apns:init, certfile = ~p platformoptions = ~p", [CertFile, PlatformOptions]),
+init([_AuthKey, _PackageSid, CertFile]) ->
+    ?DEBUG("+++++++++ mod_push_apns:init, certfile = ~p", [CertFile]),
     inets:start(),
     crypto:start(),
     ssl:start(),
     {ok, #state{certfile = CertFile,
-                sandbox = proplists:get_bool(sandbox, PlatformOptions),
-                aps_alert = true,
-                aps_badge = true,
-                aps_sound = true,
                 pending_list = [],
                 send_list = [],
                 retry_list = [],
@@ -150,7 +142,7 @@ handle_info({ssl, _Socket, Data},
     end,
     self() ! send,
     {noreply, NewState#state{pending_timestamp = undefined}};
-         
+
 handle_info({ssl_closed, _SslSocket}, State) ->
     ?INFO_MSG("connection to APNS closed!", []),
     {noreply, State#state{out_socket = undefined}};
@@ -189,7 +181,6 @@ handle_info({pending_timeout, Timestamp},
     {noreply, NewState};
 
 handle_info(send, #state{certfile = CertFile,
-                         sandbox = Sandbox,
                          out_socket = OldSocket,
                          pending_list = PendingList,
                          send_list = SendList,
@@ -197,10 +188,10 @@ handle_info(send, #state{certfile = CertFile,
                          retry_timer = RetryTimer,
                          message_id = MessageId} = State) ->
     NewState =
-    case get_socket(OldSocket, CertFile, Sandbox) of
+    case get_socket(OldSocket, CertFile) of
         {error, Reason} ->
             ?ERROR_MSG("connection to APNS failed: ~p", [Reason]),
-            NewRetryList =        
+            NewRetryList =
             pending_to_retry(PendingList, RetryList),
             {NewRetryTimer, Timestamp} = restart_retry_timer(RetryTimer),
             State#state{out_socket = error,
@@ -217,7 +208,7 @@ handle_info(send, #state{certfile = CertFile,
                 false -> {SendList, []}
             end,
             MakeMessageId =
-            fun 
+            fun
                 (Max) when Max =:= (4294967296 - 1) -> 0;
                 (OldMessageId) -> OldMessageId + 1
             end,
@@ -238,7 +229,7 @@ handle_info(send, #state{certfile = CertFile,
 
                 _ ->
                     Notifications =
-                    make_notifications(NewPendingList, State),
+                    make_notifications(NewPendingList),
                     case ssl:send(Socket, Notifications) of
                         {error, Reason} ->
                             ?ERROR_MSG("sending to APNS failed: ~p",
@@ -257,7 +248,7 @@ handle_info(send, #state{certfile = CertFile,
 
                         ok ->
                             ?INFO_MSG("sending to APNS successful", []),
-                            Timestamp = erlang:now(),
+                            Timestamp = erlang:timestamp(),
                             NewPendingTimer =
                             erlang:send_after(?PENDING_INTERVAL, self(),
                                               {pending_timeout, Timestamp}),
@@ -278,14 +269,6 @@ handle_info(Info, State) ->
 
 %-------------------------------------------------------------------------
 
-apns_url(Sandbox) ->
-    case Sandbox of
-        true -> ?PUSH_URL_SANDBOX;
-        false -> ?PUSH_URL_PRODUCTION
-    end.
-
-%-------------------------------------------------------------------------
-
 handle_call(_Req, _From, State) -> {reply, {error, badarg}, State}.
 
 %-------------------------------------------------------------------------
@@ -295,7 +278,7 @@ handle_cast({dispatch, UserBare, Payload, Token, _AppId, DisableArgs},
             #state{send_list = SendList,
                    pending_timer = PendingTimer,
                    retry_timer = RetryTimer} = State) ->
-    ?DEBUG("+++++ Sending push notification to ~p", [apns_url(State#state.sandbox)]),
+    ?DEBUG("+++++ Sending push notification to ~p", [?PUSH_URL]),
     NewSendList =
     lists:keystore(UserBare, 1, SendList,
                    {UserBare, Payload, Token, DisableArgs}),
@@ -323,18 +306,12 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 
 %-------------------------------------------------------------------------
 
-make_notifications(PendingList, State) ->
+make_notifications(PendingList) ->
     lists:foldl(
         fun({MessageId, {_, Payload, Token, _}}, Acc) ->
-            BadgeCount = proplists:get_value('message-count', Payload),
-            APSPayload =
-                [{'content-available', 1}] ++
-                if State#state.aps_alert -> [{'alert', 'Secure message'}]; true -> [] end ++
-                if State#state.aps_badge -> [{'badge', BadgeCount}]; true -> [] end ++
-                if State#state.aps_sound -> [{'sound', 'message.wav'}]; true -> [] end,
             PushMessage =
             {struct,
-             [{aps, {struct, APSPayload}}|Payload]},
+             [{aps, {struct, [{'content-available', 1}]}}|Payload]},
             EncodedMessage =
             iolist_to_binary(mochijson2:encode(PushMessage)),
             ?DEBUG("++++++ Encoded message: ~p", [EncodedMessage]),
@@ -355,23 +332,19 @@ make_notifications(PendingList, State) ->
 
 %-------------------------------------------------------------------------
 
-get_socket(OldSocket, CertFile, Sandbox) ->
+get_socket(OldSocket, CertFile) ->
     case OldSocket of
         _Invalid when OldSocket =:= undefined;
                      OldSocket =:= error ->
             SslOpts =
             [{certfile, CertFile},
+             {versions, ['tlsv1.2']},
              {ciphers, ?CIPHERSUITES},
              {reuse_sessions, true},
              {secure_renegotiate, true}],
              %{verify, verify_peer},
              %{cacertfile, CACertFile}],
-            SslExtraOpts =
-                case Sandbox of
-                    true -> [{versions, ['tlsv1.2']}];
-                    false -> []
-                end,
-            case ssl:connect(apns_url(Sandbox), ?APNS_PORT, SslOpts ++ SslExtraOpts, ?SSL_TIMEOUT) of
+            case ssl:connect(?PUSH_URL, ?APNS_PORT, SslOpts, ?SSL_TIMEOUT) of
                 {ok, S} -> S;
                 {error, E} -> {error, E}
             end;
@@ -392,6 +365,6 @@ pending_to_retry(PendingList, RetryList) ->
 
 restart_retry_timer(OldTimer) ->
     erlang:cancel_timer(OldTimer),
-    Timestamp = erlang:now(),
+    Timestamp = erlang:timestamp(),
     NewTimer = erlang:send_after(?RETRY_INTERVAL, self(), {retry, Timestamp}),
     {NewTimer, Timestamp}.

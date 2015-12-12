@@ -75,7 +75,7 @@ handle_cast({dispatch, _UserBare, Payload, Token, AppId, DisableArgs},
             #state{certfile = CertFile,
                    too_many_pending = TooManyPending} = State) ->
     % TODO: right now the clear_pending field is set if server replied with a
-    % too-many-pending error or if the include_senders option is set false. 
+    % too-many-pending error or if the include_senders option is set false.
     % There's an optional 'tag' field which we can use to tell the proprietary
     % server to clear pending notifications triggered by the same sender in order to
     % save bandwidth from proprietary server to client. So store a random tag per
@@ -136,10 +136,9 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 %-------------------------------------------------------------------------
 
 expiry_time() ->
-    Now = now(),
+    Now = erlang:timestamp(),
     {_, Seconds, _} = Now,
     Time = setelement(2, Now, Seconds + ?EXPIRY_TIME),
     jlib:now_to_utc_string(Time).
 
 %-------------------------------------------------------------------------
-

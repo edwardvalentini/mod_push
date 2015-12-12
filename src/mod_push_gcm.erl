@@ -58,7 +58,7 @@
 
 %-------------------------------------------------------------------------
 
-init([AuthKey, _PackageSid, CertFile, _PlatformOptions]) ->
+init([AuthKey, _PackageSid, CertFile]) ->
     ?DEBUG("+++++++++ mod_push_gcm:init", []),
     inets:start(),
     ssl:start(),
@@ -144,15 +144,9 @@ send_request(Payload, Token, CertFile, ApiKey) ->
         true -> Payload;
         false -> []
     end,
-    MessageCount = proplists:get_value('message-count', Payload),
     PushMessage =
     {struct,
-    [{to, Token}, {time_to_live, ?EXPIRY_TIME},
-        {notification, {struct, [
-            {title, 'Secure message'},
-            {soundname, 'message'},
-            {body, list_to_binary(io_lib:format("~B new message(s)", [MessageCount]))},
-            {notId, '1'}]}}]},
+    [{to, Token}, {time_to_live, ?EXPIRY_TIME}, {data, {struct, P}}]},
     ?DEBUG("+++++++ PushMessage (before encoding): ~p", [PushMessage]),
     Body = iolist_to_binary(mochijson2:encode(PushMessage)),
     ?DEBUG("+++++++ encoded json: ~s", [Body]),
