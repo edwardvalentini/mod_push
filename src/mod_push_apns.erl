@@ -38,8 +38,8 @@
 
 -include("logger.hrl").
 
-%-define(PUSH_URL, "gateway.push.apple.com").
--define(PUSH_URL, "gateway.sandbox.push.apple.com").
+-define(PUSH_URL, "gateway.push.apple.com").
+%-define(PUSH_URL, "gateway.sandbox.push.apple.com").
 -define(APNS_PORT, 2195).
 -define(SSL_TIMEOUT, 3000).
 -define(MAX_PAYLOAD_SIZE, 2048).
