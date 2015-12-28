@@ -631,14 +631,23 @@ delete_subscriptions({LUser, LServer}, SubscriptionPred, StopSessions) ->
 (jid()) -> {error, xmlelement()} | {registrations, [push_registration()]}).
 
 list_registrations(#jid{luser = LUser, lserver = LServer}) ->
+    ?INFO_MSG("*********************************************************",[]),
+    ?INFO_MSG("**LISTING REGISTRATIONS",[]),
     F = fun() ->
         MatchHead = #push_registration{bare_jid = {LUser, LServer}, _='_'},
-        mnesia:select(push_registration, [{MatchHead, [], ['$_']}])
+        ?INFO_MSG("** before select ",[]),
+        mnesia:select(push_registration, [{MatchHead, [], ['$_']}]),
+        ?INFO_MSG("** after select ",[])
     end,
     case mnesia:transaction(F) of
-        {aborted, _} -> {error, ?ERR_INTERNAL_SERVER_ERROR};
-        {atomic, RegList} -> {registrations, RegList}
-    end.
+        {aborted, _} ->
+          ?INFO_MSG("**LISTING REGISTRATIONS ERROR ",[]),
+          {error, ?ERR_INTERNAL_SERVER_ERROR};
+        {atomic, RegList} ->
+          ?INFO_MSG("**LISTING REGISTRATIONS OK ",[]),
+          {registrations, RegList}
+    end,
+    ?INFO_MSG("*********************************************************",[]).
 
 %-------------------------------------------------------------------------
 
@@ -741,6 +750,7 @@ do_dispatch({local_reg, _, Secret}, UserBare, NodeId, Payload) ->
     SelectedReg = mnesia:read({push_registration, NodeId}),
     case SelectedReg of
         [] ->
+            ?INFO_MSG("*******************************************************",[]),
             ?INFO_MSG("push event for local user ~p, but user is not registered"
                       " at local app server", [UserBare]);
 
@@ -753,8 +763,8 @@ do_dispatch({local_reg, _, Secret}, UserBare, NodeId, Payload) ->
                             timestamp = Timestamp}] ->
             case {UserBare, Secret} of
                 {StoredUserBare, StoredSecret} ->
-
-                    ?DEBUG("+++++ do_dispatch: found registration, dispatch locally",
+                  ?INFO_MSG("*******************************************************",[]),
+                  ?INFO_MSG("+++++ do_dispatch: found registration, dispatch locally",
                            []),
                     do_dispatch_local(UserBare, Payload, Token, AppId,
                                       BackendId, Node, Timestamp, true);
@@ -1426,14 +1436,13 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
             end;
 
         <<"list-push-registrations">> ->
-
           fun() ->
-            list_registrations(From),
             ?INFO_MSG("*******************************************************************", []),
             ?INFO_MSG("*******************************************************************", []),
             ?INFO_MSG("Processing: list-push-registrations", []),
             ?INFO_MSG("*******************************************************************", []),
-            ?INFO_MSG("*******************************************************************", [])
+            ?INFO_MSG("*******************************************************************", []),
+            list_registrations(From)
           end;
 
         _ -> unknown
