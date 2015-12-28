@@ -949,6 +949,11 @@ on_remove_user(User, Server) ->
 
 on_affiliation_removal(User, From, _To,
                        #xmlel{name = <<"message">>, children = Children}) ->
+    ?INFO_MSG("*******************************************************************", []),
+    ?INFO_MSG("*******************************************************************", []),
+    ?INFO_MSG("Received packet for user: ~p from: ~p",[User,From]),
+    ?INFO_MSG("*******************************************************************", []),
+    ?INFO_MSG("*******************************************************************", []),
     FindNodeAffiliations =
     fun
     F([#xmlel{name = <<"pubsub">>, attrs = Attrs, children = PChildr}|T]) ->
@@ -1306,9 +1311,15 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
                       #adhoc_request{node = Command,
                                      action = <<"execute">>,
                                      xdata = XData} = Request) ->
+
     Action = case Command of
         <<"register-push-apns">> ->
+
+
             fun() ->
+              ?INFO_MSG("*******************************************************************", []),
+              ?INFO_MSG("*******************************************************************", []),
+              ?INFO_MSG("Processing: register-push-apns", []),
                 Parsed = parse_form([XData],
                                     undefined,
                                     [{single, <<"token">>}],
@@ -1322,11 +1333,15 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
 
                             Token ->
                                 register_client(From, LServer, apns, Token,
-                                                DeviceId, DeviceName, <<"">>)
+                                                DeviceId, DeviceName, <<"">>),
+                                ?INFO_MSG("REGISTERED CLIENT: ~p ~p ~p ~p ~p", [From,LServer,Token,DeviceId,DeviceName])
                         end;
 
                     _ -> error
-                end
+                end,
+
+                ?INFO_MSG("*******************************************************************", []),
+                ?INFO_MSG("*******************************************************************", [])
             end;
 
         <<"register-push-gcm">> ->
@@ -1410,7 +1425,16 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
                 end
             end;
 
-        <<"list-push-registrations">> -> fun() -> list_registrations(From) end;
+        <<"list-push-registrations">> ->
+
+          fun() ->
+            list_registrations(From),
+            ?INFO_MSG("*******************************************************************", []),
+            ?INFO_MSG("*******************************************************************", []),
+            ?INFO_MSG("Processing: list-push-registrations", []),
+            ?INFO_MSG("*******************************************************************", []),
+            ?INFO_MSG("*******************************************************************", [])
+          end;
 
         _ -> unknown
     end,
@@ -1493,6 +1517,7 @@ process_adhoc_command(Acc, From, #jid{lserver = LServer},
                                             {<<"type">>, <<"result">>}],
                                    children = Items}]},
             adhoc:produce_response(Request, Response);
+
 
         error -> {error, ?ERR_BAD_REQUEST};
 
